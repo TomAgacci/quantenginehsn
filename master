@@ -1,0 +1,189 @@
+# quantitative_hsn.py
+# -------------------
+# Quantitative Heidegger–Spinoza–Nietzsche engine:
+#   - takes a concept
+#   - returns numeric scores per lens
+#   - builds combined vectors for math / ZCMS use
+
+from __future__ import annotations
+from dataclasses import dataclass, asdict
+from typing import Dict, Any
+import math
+
+
+@dataclass
+class HSNWeights:
+    heidegger: float = 1.0
+    spinoza: float = 1.0
+    nietzsche: float = 1.0
+
+    def normalized(self) -> "HSNWeights":
+        total = self.heidegger + self.spinoza + self.nietzsche
+        if total == 0:
+            return HSNWeights(1.0, 1.0, 1.0)
+        return HSNWeights(
+            self.heidegger / total,
+            self.spinoza / total,
+            self.nietzsche / total,
+        )
+
+
+@dataclass
+class LensQuantitativeProfile:
+    # You can tune these dimensions as you like.
+    groundedness: float      # concreteness / ready-to-hand
+    world_integration: float # embeddedness in context
+    continuity: float        # smoothness / substance-flow
+    unity: float             # degree of non-fragmentation
+    intensity: float         # force / energy
+    contrast: float          # visual / conceptual contrast
+
+    def as_vector(self) -> list[float]:
+        return [
+            self.groundedness,
+            self.world_integration,
+            self.continuity,
+            self.unity,
+            self.intensity,
+            self.contrast,
+        ]
+
+
+class QuantitativeHeidegger:
+    def profile(self, concept: str, weight: float) -> LensQuantitativeProfile:
+        # Heidegger: high groundedness, world integration; moderate intensity.
+        base = LensQuantitativeProfile(
+            groundedness=0.9,
+            world_integration=0.85,
+            continuity=0.5,
+            unity=0.6,
+            intensity=0.55,
+            contrast=0.4,
+        )
+        return self._scale(base, weight)
+
+    def _scale(self, p: LensQuantitativeProfile, w: float) -> LensQuantitativeProfile:
+        return LensQuantitativeProfile(
+            groundedness=p.groundedness * w,
+            world_integration=p.world_integration * w,
+            continuity=p.continuity * w,
+            unity=p.unity * w,
+            intensity=p.intensity * w,
+            contrast=p.contrast * w,
+        )
+
+
+class QuantitativeSpinoza:
+    def profile(self, concept: str, weight: float) -> LensQuantitativeProfile:
+        # Spinoza: high continuity and unity; moderate groundedness.
+        base = LensQuantitativeProfile(
+            groundedness=0.6,
+            world_integration=0.7,
+            continuity=0.95,
+            unity=0.9,
+            intensity=0.5,
+            contrast=0.35,
+        )
+        return self._scale(base, weight)
+
+    def _scale(self, p: LensQuantitativeProfile, w: float) -> LensQuantitativeProfile:
+        return LensQuantitativeProfile(
+            groundedness=p.groundedness * w,
+            world_integration=p.world_integration * w,
+            continuity=p.continuity * w,
+            unity=p.unity * w,
+            intensity=p.intensity * w,
+            contrast=p.contrast * w,
+        )
+
+
+class QuantitativeNietzsche:
+    def profile(self, concept: str, weight: float) -> LensQuantitativeProfile:
+        # Nietzsche: high intensity and contrast; lower unity.
+        base = LensQuantitativeProfile(
+            groundedness=0.5,
+            world_integration=0.55,
+            continuity=0.45,
+            unity=0.4,
+            intensity=0.95,
+            contrast=0.9,
+        )
+        return self._scale(base, weight)
+
+    def _scale(self, p: LensQuantitativeProfile, w: float) -> LensQuantitativeProfile:
+        return LensQuantitativeProfile(
+            groundedness=p.groundedness * w,
+            world_integration=p.world_integration * w,
+            continuity=p.continuity * w,
+            unity=p.unity * w,
+            intensity=p.intensity * w,
+            contrast=p.contrast * w,
+        )
+
+
+class QuantitativeHSNEngine:
+    """
+    Quantitative H-S-N Engine
+
+    Usage:
+        weights = HSNWeights(heidegger=1.2, spinoza=1.0, nietzsche=1.5)
+        engine = QuantitativeHSNEngine(weights)
+        out = engine.evaluate("standard hot mug")
+        print(out["combined_vector"])
+    """
+
+    def __init__(self, weights: HSNWeights | None = None):
+        self.weights = (weights or HSNWeights()).normalized()
+        self.h_mod = QuantitativeHeidegger()
+        self.s_mod = QuantitativeSpinoza()
+        self.n_mod = QuantitativeNietzsche()
+
+    def _combine_vectors(
+        self,
+        h: LensQuantitativeProfile,
+        s: LensQuantitativeProfile,
+        n: LensQuantitativeProfile,
+    ) -> list[float]:
+        # Simple sum; you can switch to weighted average or other norms.
+        hv = h.as_vector()
+        sv = s.as_vector()
+        nv = n.as_vector()
+        return [
+            hv[i] + sv[i] + nv[i]
+            for i in range(len(hv))
+        ]
+
+    def evaluate(self, concept: str) -> Dict[str, Any]:
+        h_profile = self.h_mod.profile(concept, self.weights.heidegger)
+        s_profile = self.s_mod.profile(concept, self.weights.spinoza)
+        n_profile = self.n_mod.profile(concept, self.weights.nietzsche)
+
+        combined_vector = self._combine_vectors(h_profile, s_profile, n_profile)
+
+        return {
+            "concept": concept,
+            "weights": asdict(self.weights),
+            "profiles": {
+                "Heidegger": asdict(h_profile),
+                "Spinoza": asdict(s_profile),
+                "Nietzsche": asdict(n_profile),
+            },
+            "combined_vector": combined_vector,
+        }
+
+
+# Example usage
+if __name__ == "__main__":
+    weights = HSNWeights(heidegger=1.2, spinoza=1.0, nietzsche=1.5)
+    engine = QuantitativeHSNEngine(weights)
+    result = engine.evaluate("standard hot mug")
+
+    print("=== Weights ===")
+    print(result["weights"])
+
+    print("\n=== Profiles ===")
+    for lens, prof in result["profiles"].items():
+        print(f"{lens}: {prof}")
+
+    print("\n=== Combined Vector ===")
+    print(result["combined_vector"
