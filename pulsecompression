@@ -1,0 +1,167 @@
+# pulsecompressionpulseloop.py
+# ----------------------------
+# A mathematically clean pulse‑compression loop suitable for:
+# - ZCMS field evolution
+# - HSN quantitative modulation
+# - cyclic or hyperfinite pulse dynamics
+
+from __future__ import annotations
+from dataclasses import dataclass
+from typing import List, Callable, Protocol
+import math
+import random
+
+
+# ----------------------------
+# Transform protocol
+# ----------------------------
+
+class PulseTransform(Protocol):
+    def __call__(self, value: float, t: int, total_steps: int) -> float:
+        ...
+
+
+# ----------------------------
+# Configuration
+# ----------------------------
+
+@dataclass
+class PulseCompressionConfig:
+    steps: int = 256
+    base_amplitude: float = 1.0
+    compression_factor: float = 0.85
+    feedback_gain: float = 0.3
+    noise_level: float = 0.0
+    clamp_min: float = -1.0
+    clamp_max: float = 1.0
+    seed: int | None = None
+
+
+# ----------------------------
+# Core Engine
+# ----------------------------
+
+class PulseCompressionPulseLoop:
+    """
+    PulseCompressionPulseLoop
+    -------------------------
+    Generates a pulse, compresses it, applies transforms,
+    and feeds back the previous output into the next step.
+    """
+
+    def __init__(
+        self,
+        config: PulseCompressionConfig | None = None,
+        transforms: List[PulseTransform] | None = None,
+    ):
+        self.config = config or PulseCompressionConfig()
+        self.transforms = transforms or []
+
+        if self.config.seed is not None:
+            random.seed(self.config.seed)
+
+    # ----------------------------
+    # Base pulse (Gaussian)
+    # ----------------------------
+
+    def _base_pulse(self, t: int) -> float:
+        center = self.config.steps / 2
+        width = self.config.steps / 8
+        x = (t - center) / width
+        return self.config.base_amplitude * math.exp(-0.5 * x * x)
+
+    # ----------------------------
+    # Compression
+    # ----------------------------
+
+    def _compress(self, value: float) -> float:
+        c = self.config.compression_factor
+        if c <= 0:
+            return value
+        sign = 1.0 if value >= 0 else -1.0
+        return sign * (abs(value) ** c)
+
+    # ----------------------------
+    # Noise + clamp
+    # ----------------------------
+
+    def _add_noise(self, value: float) -> float:
+        if self.config.noise_level <= 0:
+            return value
+        return value + random.uniform(
+            -self.config.noise_level, self.config.noise_level
+        )
+
+    def _clamp(self, value: float) -> float:
+        return max(self.config.clamp_min, min(self.config.clamp_max, value))
+
+    # ----------------------------
+    # Main loop
+    # ----------------------------
+
+    def run(self) -> List[float]:
+        steps = self.config.steps
+        feedback = 0.0
+        out: List[float] = []
+
+        for t in range(steps):
+            v = self._base_pulse(t)
+            v += self.config.feedback_gain * feedback
+            v = self._compress(v)
+
+            for transform in self.transforms:
+                v = transform(v, t, steps)
+
+            v = self._add_noise(v)
+            v = self._clamp(v)
+
+            out.append(v)
+            feedback = v
+
+        return out
+
+
+# ----------------------------
+# Optional HSN modulation
+# ----------------------------
+
+def hsn_modulation_transform(
+    h: float, s: float, n: float
+) -> PulseTransform:
+    """
+    Modulates the pulse using quantitative H‑S‑N weights.
+    """
+
+    def _transform(value: float, t: int, total: int) -> float:
+        phase = 2 * math.pi * t / max(1, total - 1)
+        H = h * math.cos(phase)
+        S = s * math.sin(phase)
+        N = n * math.cos(2 * phase)
+        return value * (1.0 + 0.25 * (H + S + N))
+
+    return _transform
+
+
+# ----------------------------
+# Standalone demo
+# ----------------------------
+
+if __name__ == "__main__":
+    cfg = PulseCompressionConfig(
+        steps=256,
+        compression_factor=0.8,
+        feedback_gain=0.4,
+        noise_level=0.01,
+        seed=42,
+    )
+
+    transforms = [
+        hsn_modulation_transform(1.0, 1.0, 1.0)
+    ]
+
+    loop = PulseCompressionPulseLoop(cfg, transforms)
+    data = loop.run()
+
+    print("index,value")
+    for i, v in enumerate(data):
+        print(f"{i},{v:.6f}")
